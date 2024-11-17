@@ -10,5 +10,44 @@
 				//MASK  ff ff ff ff ff ff ff ff 00 00
 			}
 		}
+		
+		"Functions" {
+			"CBaseEntity::ResolveFlyCollisionCustom()" {
+				"offset"	"CBaseEntity::ResolveFlyCollisionCustom()"
+				"hooktype"	"entity"
+				"return"	"void"
+				"this"		"entity"
+				"arguments"
+				{
+					"trace"
+					{
+						"type"	"objectptr"
+					}
+					"vecVelocity"
+					{
+						"type"	"vectorptr"
+					}
+				}
+			}
+			"CBaseEntity::PhysicsSolidMaskForEntity()" {
+				"offset"	"CBaseEntity::PhysicsSolidMaskForEntity()"
+				"hooktype"	"entity"
+				"return"	"int"
+				"this"		"entity"
+			}
+		}
+		
+		"Offsets" {
+			"CBaseEntity::ResolveFlyCollisionCustom()" {
+				"library"	"server"
+				"linux"		"175"
+				"windows"	"174"
+			}
+			"CBaseEntity::PhysicsSolidMaskForEntity()" {
+				"library"	"server"
+				"linux"		"174"
+				"windows"	"173"
+			}
+		}
 	}
 }
