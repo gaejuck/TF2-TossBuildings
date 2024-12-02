@@ -42,11 +42,12 @@ enum struct AirbornObjectHook {
 	int SolidMaskHook;
 }
 
-ArrayList g_aAirbornObject;
+//ArrayList g_aAirbornObject;
 
 Handle SDKCall_BuilderStartBuilding;
 DynamicHook DHook_OnResolveFlyCollisionCustom;
 DynamicHook DHook_PhysicsSolidMaskForEntity;
+DynamicHook DHook_ObjectOnGoActive;
 
 bool g_bPlayerThrow[MAXPLAYERS+1];
 float g_flClientLastBeep[MAXPLAYERS+1];
@@ -81,6 +82,7 @@ public void OnPluginStart() {
 	
 	DHook_OnResolveFlyCollisionCustom = DynamicHook.FromConf(gameConf, "CBaseEntity::ResolveFlyCollisionCustom()");
 	DHook_PhysicsSolidMaskForEntity = DynamicHook.FromConf(gameConf, "CBaseEntity::PhysicsSolidMaskForEntity()");
+	DHook_ObjectOnGoActive = DynamicHook.FromConf(gameConf, "CBaseObject::OnGoActive()");
 	
 	delete gameConf;
 	
@@ -102,19 +104,27 @@ public void OnPluginStart() {
 	attrib.SetCustom("stored_as_integer", "1");
 	attrib.SetDescriptionFormat("value_is_additive");
 	attrib.Register();
+
+	attrib.SetName("toss building ammo");
+	attrib.SetClass("toss_building_ammo");
+	attrib.SetCustom("stored_as_integer", "1");
+	attrib.SetDescriptionFormat("value_is_additive");
+	attrib.Register();
 	
 	delete attrib;
 	
-	g_aAirbornObject = new ArrayList(sizeof(AirbornObjectHook)); //ref, collsion hook, solidmask hook.
+	//g_aAirbornObject = new ArrayList(sizeof(AirbornObjectHook)); //ref, collsion hook, solidmask hook.
 	
 	HookEvent("player_carryobject", OnPlayerCarryObject);
 	HookEvent("player_builtobject", OnPlayerBuiltObject);
 	HookEvent("player_dropobject", OnPlayerBuiltObject);
 }
 
+/*
 public void OnMapStart() {
 	g_aAirbornObject.Clear();
 }
+*/
 
 public void OnClientDisconnect(int client) {
 	g_bPlayerThrow[client] = false;
@@ -185,8 +195,15 @@ public void OnPlayerBuiltObject(Event event, const char[] name, bool dontBroadca
 	if ((BUILDING_DISPENSER <= objecttype <= BUILDING_SENTRYGUN) && IsClientInGame(owner) && IsValidEdict(building) && g_bPlayerThrow[owner]) {
 		g_bPlayerThrow[owner] = false;
 		SetEntityCollisionGroup(building, 2);
+
+		DHook_OnResolveFlyCollisionCustom.HookEntity(Hook_Post, building, OnResolveFlyCollisionPost);
+		DHook_PhysicsSolidMaskForEntity.HookEntity(Hook_Post, building, PhysicsSolidMaskForEntityPost);
+
+		if (BUILDING_SENTRYGUN == objecttype) {
+			DHook_ObjectOnGoActive.HookEntity(Hook_Post, building, ObjectOnGoActivePost);
+		}
 		
-		int buildref = EntIndexToEntRef(building);
+		/*
 		if (g_aAirbornObject.FindValue(buildref, AirbornObjectHook::ref) == -1) {
 			AirbornObjectHook objectHook;
 			objectHook.ref = buildref;
@@ -195,7 +212,9 @@ public void OnPlayerBuiltObject(Event event, const char[] name, bool dontBroadca
 			
 			g_aAirbornObject.PushArray(objectHook);
 		}
+		*/
 		
+		int buildref = EntIndexToEntRef(building);
 		RequestFrame(ThrowBuilding, buildref);
 	}
 }
@@ -207,7 +226,7 @@ public void ThrowBuilding(int buildref) {
 	
 	int owner = GetEntPropEnt(building, Prop_Send, "m_hBuilder");
 	if (owner < 1 || owner > MaxClients || !IsClientInGame(owner)) {
-		RemoveFromAirbornArray(buildref);
+		//RemoveFromAirbornArray(buildref);
 		return;
 	}
 	
@@ -242,7 +261,7 @@ public void ThrowBuilding(int buildref) {
 		BreakBuilding(building);
 		return;
 	}
-	
+
 	// SetEntProp(building, Prop_Send, "m_usSolidFlags", view_as<SolidFlags_t>(GetEntProp(building, Prop_Data, "m_usSolidFlags")) | FSOLID_NOT_SOLID);
 	VS_SetMoveType(building, 5, 2);
 	SetEntityGravity(building, gravity);
@@ -254,7 +273,7 @@ public void NextFrame_HookGroundEntChange(int buildref) {
 	int building = EntRefToEntIndex(buildref);
 	if (building == INVALID_ENT_REFERENCE)
 		return;
-	
+
 	SDKHook(building, SDKHook_GroundEntChangedPost, OnBuildingGroundEntChanged);
 }
 
@@ -291,6 +310,18 @@ MRESReturn PhysicsSolidMaskForEntityPost(int entity, DHookReturn ret) {
 	return MRES_Override;
 }
 
+MRESReturn ObjectOnGoActivePost(int building) {
+	int owner = GetEntPropEnt(building, Prop_Send, "m_hBuilder");
+	int iAmmo = TF2Attrib_HookValueInt(0, "toss_building_ammo", owner);
+	int curAmmo = GetEntProp(building, Prop_Send, "m_iAmmoShells");
+
+	if(curAmmo > iAmmo) {
+		SetEntProp(building, Prop_Send, "m_iAmmoShells", iAmmo);
+	}
+	
+	return MRES_Ignored;
+}
+
 public void OnBuildingGroundEntChanged(int building) {
 	float origin[3], maxs[3], mins[3];
 	GetEntPropVector(building, Prop_Send, "m_vecOrigin", origin);
@@ -320,7 +351,7 @@ public void OnBuildingGroundEntChanged(int building) {
 		VS_SetMoveType(building, 0, 0);
 	}
 	
-	RemoveFromAirbornArray(EntIndexToEntRef(building));
+	//RemoveFromAirbornArray(EntIndexToEntRef(building));
 	SDKUnhook(building, SDKHook_GroundEntChangedPost, OnBuildingGroundEntChanged);
 }
 
@@ -474,6 +505,7 @@ stock void VS_SetMoveType(int entity, int moveType, int moveCollide) {
 	AcceptEntityInput(entity, "RunScriptCode");
 }
 
+/*
 void RemoveFromAirbornArray(int buildref) {
 	int index = g_aAirbornObject.FindValue(buildref, AirbornObjectHook::ref);
 	if (index != -1) {
@@ -484,9 +516,10 @@ void RemoveFromAirbornArray(int buildref) {
 		g_aAirbornObject.Erase(index);
 	}
 }
+*/
 
 void BreakBuilding(int building) {
-	RemoveFromAirbornArray(EntIndexToEntRef(building));
+	//RemoveFromAirbornArray(EntIndexToEntRef(building));
 	
 	SetVariantInt(RoundToCeil(GetEntProp(building, Prop_Data, "m_iHealth") * 1.5));
 	AcceptEntityInput(building, "RemoveHealth");
