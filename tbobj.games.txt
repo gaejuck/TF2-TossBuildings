@@ -35,6 +35,12 @@
 				"return"	"int"
 				"this"		"entity"
 			}
+			"CBaseObject::OnGoActive()" {
+				"offset"		"CBaseObject::OnGoActive()"
+				"hooktype"		"entity"
+				"return"		"void"
+				"this"			"entity"
+			}
 		}
 		
 		"Offsets" {
@@ -47,6 +53,11 @@
 				"library"	"server"
 				"linux"		"174"
 				"windows"	"173"
+			}
+			"CBaseObject::OnGoActive()" {
+				"library"	"server"
+				"windows"	"372"
+				"linux"		"374"
 			}
 		}
 	}

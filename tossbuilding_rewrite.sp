@@ -61,6 +61,7 @@ enum struct BuildingData {
 Handle SDKCall_BuilderStartBuilding;
 DynamicHook DHook_OnResolveFlyCollisionCustom;
 DynamicHook DHook_PhysicsSolidMaskForEntity;
+DynamicHook DHook_ObjectOnGoActive;
 
 // GlobalForward g_Fwd_Toss, g_Fwd_TossPost, g_Fwd_Land;
 
@@ -97,6 +98,7 @@ public void OnPluginStart() {
 	
 	DHook_OnResolveFlyCollisionCustom = DynamicHook.FromConf(gameConf, "CBaseEntity::ResolveFlyCollisionCustom()");
 	DHook_PhysicsSolidMaskForEntity = DynamicHook.FromConf(gameConf, "CBaseEntity::PhysicsSolidMaskForEntity()");
+	DHook_ObjectOnGoActive = DynamicHook.FromConf(gameConf, "CBaseObject::OnGoActive()");
 	
 	delete gameConf;
 	
@@ -115,6 +117,12 @@ public void OnPluginStart() {
 	
 	attrib.SetName("can toss building");
 	attrib.SetClass("can_toss_building");
+	attrib.SetCustom("stored_as_integer", "1");
+	attrib.SetDescriptionFormat("value_is_additive");
+	attrib.Register();
+
+	attrib.SetName("toss building ammo");
+	attrib.SetClass("toss_building_ammo");
 	attrib.SetCustom("stored_as_integer", "1");
 	attrib.SetDescriptionFormat("value_is_additive");
 	attrib.Register();
@@ -203,6 +211,10 @@ public void OnPlayerBuiltObject(Event event, const char[] name, bool dontBroadca
 	if ((BUILDING_DISPENSER <= objecttype <= BUILDING_SENTRYGUN) && IsClientInGame(owner) && IsValidEntity(building) && g_bPlayerThrow[owner]) {
 		SetEntityCollisionGroup(building, 2);
 		ThrowBuilding(building);
+
+		if (BUILDING_SENTRYGUN == objecttype) {
+			DHook_ObjectOnGoActive.HookEntity(Hook_Post, building, ObjectOnGoActivePost);
+		}
 	}
 }
 
@@ -253,7 +265,7 @@ public void ThrowBuilding(int building) {
 		RequestFrame(NextFrame_FixNoObjectBeingHeld, GetClientUserId(owner));
 		return;
 	}
-	
+
 	// double up the CheckThrowPos trace, since we're a tick later
 	TR_TraceRayFilter(pos, shootPos, MASK_PLAYERSOLID, RayType_EndPoint, TraceFilter_PassSelfAndClients, building);
 	if (TR_DidHit()) {
@@ -262,7 +274,7 @@ public void ThrowBuilding(int building) {
 		RequestFrame(NextFrame_FixNoObjectBeingHeld, GetClientUserId(owner));
 		return;
 	}
-	
+
 	VS_SetMoveType(building, 5, 2);
 	SetEntityGravity(building, gravity);
 	TeleportEntity(building, shootPos, angles, velocity);
@@ -274,7 +286,7 @@ public void NextFrame_HookGroundEntChange(int buildref) {
 	int building = EntRefToEntIndex(buildref);
 	if (building == INVALID_ENT_REFERENCE)
 		return;
-	
+
 	SDKHook(building, SDKHook_GroundEntChangedPost, OnBuildingGroundEntChanged);
 }
 */
@@ -310,6 +322,18 @@ MRESReturn OnResolveFlyCollisionPost(int building, DHookParam params) {
 MRESReturn PhysicsSolidMaskForEntityPost(int entity, DHookReturn ret) {
 	ret.Value = ret.Value | CONTENTS_PLAYERCLIP;
 	return MRES_Override;
+}
+
+MRESReturn ObjectOnGoActivePost(int building) {
+	int owner = GetEntPropEnt(building, Prop_Send, "m_hBuilder");
+	int iAmmo = TF2Attrib_HookValueInt(0, "toss_building_ammo", owner);
+	int curAmmo = GetEntProp(building, Prop_Send, "m_iAmmoShells");
+
+	if(curAmmo > iAmmo) {
+		SetEntProp(building, Prop_Send, "m_iAmmoShells", iAmmo);
+	}
+	
+	return MRES_Ignored;
 }
 
 public void OnBuildingGroundEntChanged(int building) {
